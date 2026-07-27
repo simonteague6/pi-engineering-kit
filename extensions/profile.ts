@@ -66,6 +66,8 @@ const COLOR_CODES: Record<ProfileColor, number> = {
 const CONFIG_PATH = join(getAgentDir(), "profiles.json");
 const STATE_ENTRY = "profile-state";
 const STATUS_KEY = "profile";
+export const PROFILE_PICKER_SHORTCUT = "alt+p" as const;
+export const PROFILE_CYCLE_SHORTCUT = "alt+n" as const;
 
 const BUILTIN_META: Record<BuiltinId, Pick<Profile, "name" | "thinkingLevel" | "color">> = {
 	interrogate: { name: "Interrogate", thinkingLevel: "high", color: "blue" },
@@ -521,8 +523,8 @@ export default function profileExtension(pi: ExtensionAPI) {
 		}
 	}
 
-	pi.registerShortcut(Key.ctrlShift("l"), { description: "Open profile selector", handler: showPicker });
-	pi.registerShortcut(Key.ctrlShift("u"), { description: "Cycle profiles", handler: cycleProfile });
+	pi.registerShortcut(PROFILE_PICKER_SHORTCUT, { description: "Open profile selector", handler: showPicker });
+	pi.registerShortcut(PROFILE_CYCLE_SHORTCUT, { description: "Cycle profiles", handler: cycleProfile });
 
 	pi.registerCommand("profile", {
 		description: "Select or manage model + reasoning profiles",
