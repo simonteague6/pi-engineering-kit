@@ -3,15 +3,15 @@ import { dirname, join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import {
 	getAgentDir,
+	SettingsManager,
 	type ExtensionAPI,
 	type ExtensionContext,
 	type Theme,
-	type ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-type ProfileColor = "accent" | "success" | "warning" | "error" | "muted" | "thinkingHigh" | "syntaxFunction";
+type ProfileColor = "red" | "orange" | "yellow" | "green" | "blue" | "indigo" | "violet" | "cyan" | "pink" | "gray" | "white";
 type BuiltinId = "interrogate" | "implement" | "review" | "diagnose";
 
 interface Profile {
@@ -48,16 +48,30 @@ interface PickerAction {
 
 const BUILTIN_IDS: BuiltinId[] = ["interrogate", "implement", "review", "diagnose"];
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-const COLORS: ProfileColor[] = ["accent", "success", "warning", "error", "muted", "thinkingHigh", "syntaxFunction"];
+// ROYGBIV first, followed by useful terminal extras.
+const COLORS: ProfileColor[] = ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "cyan", "pink", "gray", "white"];
+const COLOR_CODES: Record<ProfileColor, number> = {
+	red: 203,
+	orange: 208,
+	yellow: 220,
+	green: 114,
+	blue: 75,
+	indigo: 63,
+	violet: 135,
+	cyan: 81,
+	pink: 205,
+	gray: 245,
+	white: 255,
+};
 const CONFIG_PATH = join(getAgentDir(), "profiles.json");
 const STATE_ENTRY = "profile-state";
 const STATUS_KEY = "profile";
 
 const BUILTIN_META: Record<BuiltinId, Pick<Profile, "name" | "thinkingLevel" | "color">> = {
-	interrogate: { name: "Interrogate", thinkingLevel: "high", color: "accent" },
-	implement: { name: "Implement", thinkingLevel: "medium", color: "success" },
-	review: { name: "Review", thinkingLevel: "high", color: "warning" },
-	diagnose: { name: "Diagnose", thinkingLevel: "xhigh", color: "error" },
+	interrogate: { name: "Interrogate", thinkingLevel: "high", color: "blue" },
+	implement: { name: "Implement", thinkingLevel: "medium", color: "green" },
+	review: { name: "Review", thinkingLevel: "high", color: "violet" },
+	diagnose: { name: "Diagnose", thinkingLevel: "xhigh", color: "red" },
 };
 
 function createDefaultConfig(provider: string, model: string): ProfileConfig {
@@ -81,6 +95,25 @@ function isThinkingLevel(value: unknown): value is ThinkingLevel {
 
 function isColor(value: unknown): value is ProfileColor {
 	return typeof value === "string" && COLORS.includes(value as ProfileColor);
+}
+
+function normalizeColor(value: unknown, fallback: ProfileColor): ProfileColor {
+	if (isColor(value)) return value;
+	const legacyColors: Record<string, ProfileColor> = {
+		accent: "blue",
+		success: "green",
+		warning: "yellow",
+		error: "red",
+		muted: "gray",
+		thinkingHigh: "violet",
+		syntaxFunction: "violet",
+		magenta: "violet",
+	};
+	return typeof value === "string" ? legacyColors[value] ?? fallback : fallback;
+}
+
+function colorText(color: ProfileColor, text: string): string {
+	return `\x1b[38;5;${COLOR_CODES[color]}m${text}\x1b[39m`;
 }
 
 function sanitizeId(value: string): string {
@@ -110,7 +143,7 @@ function loadConfig(provider: string, model: string): ProfileConfig {
 			thinkingLevel: isThinkingLevel(candidate?.thinkingLevel)
 				? candidate.thinkingLevel
 				: BUILTIN_META[id].thinkingLevel,
-			color: isColor(candidate?.color) ? candidate.color : BUILTIN_META[id].color,
+			color: normalizeColor(candidate?.color, BUILTIN_META[id].color),
 			enabled: typeof candidate?.enabled === "boolean" ? candidate.enabled : true,
 		};
 	}
@@ -132,7 +165,7 @@ function loadConfig(provider: string, model: string): ProfileConfig {
 			provider: candidate.provider,
 			model: candidate.model,
 			thinkingLevel: candidate.thinkingLevel,
-			color: isColor(candidate.color) ? candidate.color : "muted",
+			color: normalizeColor(candidate.color, "gray"),
 			enabled: typeof candidate.enabled === "boolean" ? candidate.enabled : true,
 			builtin: false,
 		};
@@ -166,10 +199,11 @@ class ProfilePicker {
 	constructor(
 		private readonly config: ProfileConfig,
 		private readonly activeId: string | undefined,
+		selectedId: string | undefined,
 		private readonly theme: Theme,
 		private readonly done: (action: PickerAction) => void,
 	) {
-		this.selected = Math.max(0, this.items().findIndex((id) => id === activeId));
+		this.selected = Math.max(0, this.items().findIndex((id) => id === selectedId));
 	}
 
 	private items(): Array<string | undefined> {
@@ -223,8 +257,9 @@ class ProfilePicker {
 			}
 			const profile = this.config.profiles[id]!;
 			const active = this.activeId === id ? th.fg("success", "●") : " ";
-			const dot = th.fg(profile.color as ThemeColor, "●");
-			const name = th.fg(profile.enabled ? profile.color as ThemeColor : "dim", selected ? th.bold(profile.name) : profile.name);
+			const dot = colorText(profile.color, "●");
+			const nameText = selected ? th.bold(profile.name) : profile.name;
+			const name = profile.enabled ? colorText(profile.color, nameText) : th.fg("dim", nameText);
 			const disabled = profile.enabled ? "" : th.fg("dim", " [disabled]");
 			const builtin = profile.builtin ? th.fg("dim", "  built-in") : "";
 			lines.push(line(`${prefix}${active} ${dot} ${name}${disabled}${builtin}`));
@@ -257,10 +292,7 @@ export default function profileExtension(pi: ExtensionAPI) {
 
 	function updateStatus(ctx: ExtensionContext): void {
 		const profile = activeId && config?.profiles[activeId];
-		ctx.ui.setStatus(
-			STATUS_KEY,
-			profile ? ctx.ui.theme.fg(profile.color as ThemeColor, `● profile: ${profile.name}`) : undefined,
-		);
+		ctx.ui.setStatus(STATUS_KEY, profile ? colorText(profile.color, `● ${profile.name}`) : undefined);
 	}
 
 	function persistActive(): void {
@@ -330,15 +362,42 @@ export default function profileExtension(pi: ExtensionAPI) {
 		saveConfig(config);
 	}
 
-	async function chooseModel(ctx: ExtensionContext, current?: Profile): Promise<{ provider: string; model: string } | undefined> {
-		if (!ctx.hasUI) return undefined;
+	function getScopedModelNames(ctx: ExtensionContext): string[] {
+		const settings = SettingsManager.create(ctx.cwd, getAgentDir(), { projectTrusted: ctx.isProjectTrusted() });
+		const patterns = settings.getEnabledModels() ?? [];
+		if (patterns.length === 0) return [];
+
 		const available = ctx.modelRegistry.getAvailable();
-		const values = [...new Set(available.map((model) => `${model.provider}/${model.id}`))].sort();
-		if (current) {
-			const existing = `${current.provider}/${current.model}`;
-			if (!values.includes(existing)) values.unshift(existing);
+		const selected: string[] = [];
+		for (const rawPattern of patterns) {
+			const parts = rawPattern.split(":");
+			if (isThinkingLevel(parts.at(-1))) parts.pop();
+			const pattern = parts.join(":").toLowerCase();
+			const hasWildcard = pattern.includes("*") || pattern.includes("?");
+			const wildcard = hasWildcard
+				? new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`, "i")
+				: undefined;
+
+			for (const model of available) {
+				const canonical = `${model.provider}/${model.id}`;
+				const fields = [canonical, model.id, model.name ?? ""].map((value) => value.toLowerCase());
+				const matches = wildcard
+					? fields.some((value) => wildcard.test(value))
+					: fields.some((value) => value === pattern || value.includes(pattern));
+				if (matches && !selected.includes(canonical)) selected.push(canonical);
+			}
 		}
-		const selected = await ctx.ui.select("Profile model", values);
+		return selected;
+	}
+
+	async function chooseModel(ctx: ExtensionContext): Promise<{ provider: string; model: string } | undefined> {
+		if (!ctx.hasUI) return undefined;
+		const values = getScopedModelNames(ctx);
+		if (values.length === 0) {
+			ctx.ui.notify("No scoped models are available. Configure them with /scoped-models first.", "warning");
+			return undefined;
+		}
+		const selected = await ctx.ui.select("Profile model (scoped models)", values);
 		return selected ? splitModel(selected) : undefined;
 	}
 
@@ -371,7 +430,7 @@ export default function profileExtension(pi: ExtensionAPI) {
 			const value = await ctx.ui.select("Profile color", COLORS);
 			if (isColor(value)) color = value;
 		}
-		color ??= "muted";
+		color ??= "gray";
 		config.profiles[id] = { id, name: name.trim(), ...pair, thinkingLevel: effort, color, enabled: true, builtin: false };
 		config.order.push(id);
 		saveConfig(config);
@@ -381,7 +440,7 @@ export default function profileExtension(pi: ExtensionAPI) {
 	async function editProfile(id: string, ctx: ExtensionContext): Promise<void> {
 		const profile = config?.profiles[id];
 		if (!profile || !config) return;
-		const pair = await chooseModel(ctx, profile);
+		const pair = await chooseModel(ctx);
 		if (!pair) return;
 		const effort = await ctx.ui.select("Reasoning effort", THINKING_LEVELS);
 		if (!isThinkingLevel(effort)) return;
@@ -414,10 +473,11 @@ export default function profileExtension(pi: ExtensionAPI) {
 			return;
 		}
 		let open = true;
+		let selectedId = activeId;
 		while (open) {
 			const action = await ctx.ui.custom<PickerAction>(
 				(tui, theme, _keybindings, done) => {
-					const picker = new ProfilePicker(config!, activeId, theme, done);
+					const picker = new ProfilePicker(config!, activeId, selectedId, theme, done);
 					return {
 						render: (width) => picker.render(width),
 						invalidate: () => picker.invalidate(),
@@ -427,6 +487,7 @@ export default function profileExtension(pi: ExtensionAPI) {
 				{ overlay: true, overlayOptions: { width: 76, minWidth: 56, maxHeight: "90%", anchor: "center", margin: 1 } },
 			);
 			if (!action || action.type === "close") break;
+			if (action.id !== undefined) selectedId = action.id;
 			switch (action.type) {
 				case "activate":
 					if (await activate(action.id, ctx)) open = false;
