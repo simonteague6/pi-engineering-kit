@@ -1,0 +1,17 @@
+{
+  "name": "pi-engineering-kit",
+  "version": "0.1.0",
+  "description": "A SDLC workflow biased towards Matt Pocock's skills repo.",
+  "keywords": ["pi-package"],
+  "type": "module",
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}
