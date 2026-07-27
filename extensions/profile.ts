@@ -66,8 +66,9 @@ const COLOR_CODES: Record<ProfileColor, number> = {
 const CONFIG_PATH = join(getAgentDir(), "profiles.json");
 const STATE_ENTRY = "profile-state";
 const STATUS_KEY = "profile";
-export const PROFILE_PICKER_SHORTCUT = "alt+p" as const;
-export const PROFILE_CYCLE_SHORTCUT = "alt+n" as const;
+// ctrl+p and ctrl+l are already used by pi for session/model actions.
+export const PROFILE_PICKER_SHORTCUT = "ctrl+space" as const;
+export const PROFILE_CYCLE_SHORTCUT = "ctrl+q" as const;
 
 const BUILTIN_META: Record<BuiltinId, Pick<Profile, "name" | "thinkingLevel" | "color">> = {
 	interrogate: { name: "Interrogate", thinkingLevel: "high", color: "blue" },
