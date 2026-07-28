@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-const STATUS_KEY = "total-ctx-usage";
+const STATUS_KEY = "current-context-size";
 
 export default function totalContextUsage(pi: ExtensionAPI): void {
 	pi.on("turn_end", (_event, ctx) => {
