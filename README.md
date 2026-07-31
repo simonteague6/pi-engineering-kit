@@ -1,0 +1,199 @@
+<p align="center">
+  <a href="https://pi.dev">
+    <img alt="pi logo" src="https://pi.dev/logo-auto.svg" width="96">
+  </a>
+</p>
+
+<h1 align="center">pi-engineering-kit</h1>
+
+<p align="center">Engineering-focused extensions for the <a href="https://pi.dev">pi</a> terminal coding agent.</p>
+
+<p align="center">
+  <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white"></a>
+  <a href="https://pi.dev/docs/packages"><img alt="pi package" src="https://img.shields.io/badge/pi-package-7C3AED?style=flat-square"></a>
+</p>
+
+[Features](#features) • [Install](#install) • [Usage](#usage) • [Configuration](#configuration) • [Development](#development)
+
+`pi-engineering-kit` is a pi package for an SDLC-oriented workflow. It adds model-and-reasoning profiles, context visibility, native session handoffs, and a searchable code-block clipboard picker without modifying pi itself.
+
+> [!WARNING]
+> Pi packages run with full system access. Review the extensions in `extensions/` before installing this package, especially if you are installing from an unpinned Git ref.
+
+## Features
+
+- **Model profiles** — Switch between built-in or custom combinations of provider, model, and reasoning effort. Profiles do not change prompts, tools, permissions, skills, or other behavior.
+- **Native handoff** — Generate a durable handoff artifact and move into an idle replacement session with the context already available.
+- **Context visibility** — Show current context usage in the footer and warn when a session approaches context limits.
+- **Code-block clipboard picker** — Search fenced code blocks from completed assistant replies and copy the selected block to the system clipboard.
+
+## Install
+
+Install directly from GitHub:
+
+```bash
+pi install git:github.com/simonteague6/pi-engineering-kit
+```
+
+For a reproducible install, pin a tag or commit:
+
+```bash
+pi install git:github.com/simonteague6/pi-engineering-kit@<tag-or-commit>
+```
+
+To try the package for one run without adding it to your settings:
+
+```bash
+pi -e git:github.com/simonteague6/pi-engineering-kit
+```
+
+Restart pi, or run `/reload`, after installing. Use `pi list` to confirm that the package is installed.
+
+### Requirements
+
+- [pi](https://pi.dev/) with pi package support
+- An authenticated pi model for profiles and `/handoff`
+- A system clipboard backend for `/copy-code`:
+  - macOS: `pbcopy`
+  - Windows: `clip`
+  - Linux: one of `wl-copy`, `xclip`, or `xsel`
+
+## Usage
+
+### Profiles
+
+The package provides four built-in profiles, named around the modes encouraged by [Matt Pocock's skills](https://github.com/mattpocock/skills):
+
+| Profile | Default reasoning effort | Color |
+| --- | --- | --- |
+| `interrogate` | `high` | Blue |
+| `implement` | `medium` | Green |
+| `review` | `high` | Violet |
+| `diagnose` | `xhigh` | Red |
+
+The values above are defaults, not locked settings. You can change a built-in profile's model, reasoning effort, and color later. The built-in names are fixed and cannot be deleted, but each profile can be enabled or disabled. They inherit the provider and model active when the configuration is initialized.
+
+The `interrogate` profile is selected by default when it is enabled. In the TUI:
+
+| Action | Shortcut or command |
+| --- | --- |
+| Open the profile picker | `Ctrl+Space` |
+| Cycle enabled profiles | `Ctrl+Q` |
+| Open the picker | `/profile` |
+| Disable the active profile | `/profile none` |
+
+The picker supports enabling/disabling profiles, reordering them, changing their color, and managing custom profiles. Useful command forms include:
+
+```text
+/profile add <name> <provider/model> <effort> [color]
+/profile remove <name>
+/profile enable <name>
+/profile disable <name>
+/profile <name>
+```
+
+Interactive `/profile add` uses the models allowed by `/scoped-models`. In non-TUI mode, provide all required arguments explicitly.
+
+### Context usage
+
+After each completed turn, the footer shows usage in the form `ctx 117k`. A widget appears when usage reaches:
+
+- **100,000 tokens** — reasoning quality may be declining; `/handoff` is recommended.
+- **130,000 tokens** — reasoning quality may be degraded; `/handoff` is urgent.
+
+The widget is cleared when a session starts or context usage is unavailable.
+
+### Native handoff
+
+Run `/handoff` when the current session is becoming too large:
+
+```text
+/handoff
+/handoff Focus on finishing the failing tests
+```
+
+The command:
+
+1. Asks the active model to write a concise handoff document, including suggested skills and the optional next-session focus.
+2. Redacts sensitive information and avoids duplicating existing artifacts such as plans, issues, ADRs, commits, and diffs.
+3. Atomically writes and verifies the handoff artifact in an OS temporary directory outside the workspace.
+4. Creates a pending replacement session containing the handoff context, without sending an automatic provider message.
+5. Records a handoff marker in the source session when possible.
+
+The replacement session waits for your next instruction, so you remain in control of when work resumes.
+
+### Copy assistant code
+
+Run `/copy-code` in interactive TUI mode to open a picker containing fenced code blocks from completed assistant replies.
+
+- Type to filter by language, preview text, or turn number.
+- Use `↑`/`↓` to select a block.
+- Press `Enter` to copy only the block body, without its Markdown fences.
+- Press `Esc` to cancel.
+
+## Configuration
+
+By default, profiles are stored at:
+
+```text
+~/.pi/agent/profiles.json
+```
+
+The path follows pi's configured agent directory, so `PI_CODING_AGENT_DIR` can change its location.
+
+The picker is the recommended way to manage this file. A custom profile has this shape:
+
+```json
+{
+  "id": "fast",
+  "name": "Fast",
+  "provider": "openai",
+  "model": "gpt-5.4-mini",
+  "thinkingLevel": "low",
+  "color": "cyan",
+  "enabled": true,
+  "builtin": false
+}
+```
+
+Supported reasoning levels are `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Supported profile colors are `red`, `orange`, `yellow`, `green`, `blue`, `indigo`, `violet`, `cyan`, `pink`, `gray`, and `white`.
+
+## Development
+
+Clone the repository and install its development dependencies with Bun:
+
+```bash
+git clone https://github.com/simonteague6/pi-engineering-kit.git
+cd pi-engineering-kit
+bun install
+```
+
+Run the test suite and type checker:
+
+```bash
+bun test
+bunx tsc --noEmit
+```
+
+The package does not require a build step. Pi loads the TypeScript extensions declared by the `pi` manifest in `package.json`.
+
+### Project layout
+
+```text
+extensions/
+├── context-usage-meter.ts   # Threshold warnings above the editor
+├── copy-code.ts              # Searchable code-block clipboard picker
+├── current-context-size.ts  # Footer context usage status
+├── handoff.ts               # Native session transfer
+└── profile.ts                # Model and reasoning profiles
+
+tests/                       # Bun tests for extension behavior
+docs/agents/                 # Repository workflow documentation
+```
+
+## Related documentation
+
+- [Pi packages](https://pi.dev/docs/packages)
+- [Pi extensions](https://pi.dev/docs/extensions)
+- [Matt Pocock's skills repository](https://github.com/mattpocock/skills)
+- [`CONTEXT.md`](./CONTEXT.md) — terminology for native session handoffs
