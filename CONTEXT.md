@@ -16,6 +16,56 @@ _Avoid_: Old session
 The fresh session that receives the handoff context and waits for the user’s next instruction.
 _Avoid_: New conversation, new window
 
+## Subagent execution language
+
+**Run**:
+One execution of a single node, parallel group, or chain.
+_Avoid_: Job, task (when referring to the whole execution)
+
+**Node**:
+One agent invocation inside a run.
+_Avoid_: Step (when the position is not the main concern)
+
+**Blocking execution**:
+A run whose active parent turn stays open until the run returns a terminal result.
+_Avoid_: Foreground
+
+**Detached execution**:
+A run that continues after the parent turn ends. The parent remains available and receives completion notifications.
+_Avoid_: Background (as the runtime term)
+
+**Suspension**:
+A non-terminal frozen run that can resume from its latest durable checkpoint.
+_Avoid_: Cancellation, stop
+
+**Cancellation**:
+A terminal decision to end a run. A cancelled run cannot resume.
+_Avoid_: Suspension, pause
+
+**Internal completion event**:
+A runtime record for every child state change, including successful node completion. It is available for status and inspection but does not automatically enter parent context.
+_Avoid_: Parent notification
+
+**Parent notification**:
+A queued, compact record surfaced to the parent for a child failure, cancellation, suspension, or final graph result. It does not interrupt an active parent turn.
+_Avoid_: Completion event, interrupt, tool call
+
+**Auto-resume**:
+A runtime-started parent turn that processes a parent notification when the parent is idle. If the parent is busy, the notification waits without interrupting the turn.
+_Avoid_: Interrupt, forced turn
+
+**Handoff memo**:
+The complete plain-text output passed from one node to the next. It is separate from compact parent notifications and is not truncated.
+_Avoid_: Parent summary, transcript
+
+**Logical role**:
+The parent-assigned responsibility for a node, such as `Backend Researcher`. It identifies the work for the parent and runtime, but it is not an execution identity and need not be shown to the child.
+_Avoid_: Node ID, agent ID
+
+**Recovery run**:
+A new run that replaces failed logical roles and continues the remaining graph using artifacts from the original run.
+_Avoid_: Continuation graph, mutated run
+
 **Handoff marker**:
 A compact, durable TUI record in the source session showing that a handoff occurred and identifying its artifact.
 _Avoid_: Notification, custom LLM message
